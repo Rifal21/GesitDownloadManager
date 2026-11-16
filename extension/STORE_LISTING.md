@@ -9,6 +9,13 @@ clicking a download link) at 1280x800.
 ## Name
 Gesit Integration
 
+## Homepage / support URL
+https://github.com/Rifal21/GesitDownloadManager
+https://github.com/Rifal21/GesitDownloadManager/issues
+
+## Privacy policy URL
+https://github.com/Rifal21/GesitDownloadManager/blob/main/PRIVACY.md
+
 ## Short description (max 132 characters)
 Send downloads and videos from your browser to Gesit, the fast multi-connection download manager for Linux.
 

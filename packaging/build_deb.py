@@ -18,8 +18,8 @@ sys.path.insert(0, ROOT)
 from gesit import __version__, hostinstall  # noqa: E402
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "dist")
-MAINTAINER = os.environ.get("GESIT_MAINTAINER", "Gesit maintainers <maintainers@invalid>")
-HOMEPAGE = os.environ.get("GESIT_HOMEPAGE", "https://github.com/OWNER/gesit")
+MAINTAINER = os.environ.get("GESIT_MAINTAINER", "Rifal21 <giantjou77@gmail.com>")
+HOMEPAGE = os.environ.get("GESIT_HOMEPAGE", "https://github.com/Rifal21/GesitDownloadManager")
 PYDIR = "usr/lib/python3/dist-packages"
 
 files: dict[str, tuple[bytes, int]] = {}  # path -> (content, mode)

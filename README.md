@@ -81,14 +81,13 @@ python packaging/make_icons.py               # buat ulang semua ikon dari gesit/
 ## Membuat rilis
 
 ```sh
-export GESIT_MAINTAINER="Nama Kamu <email@kamu>" GESIT_HOMEPAGE="https://github.com/kamu/gesit"
 ./packaging/release.sh               # tarball, paket Arch, .deb, zip toko ekstensi, SHA256SUMS di dist/
 ./packaging/release.sh --appimage    # plus AppImage (mengunduh CPython, wheel PyPI, appimagetool: baca skripnya dulu)
 ```
 
 Urutan publikasi:
-1. Ganti `OWNER` di `packaging/PKGBUILD`, `packaging/aur/PKGBUILD`, dan `packaging/build_deb.py` (atau set `GESIT_HOMEPAGE`).
-2. Buat rilis GitHub `v1.0.0` dan unggah isi `dist/`.
+1. Naikkan versi di `gesit/__init__.py`, `pyproject.toml`, dan kedua PKGBUILD, lalu tulis catatan di `CHANGELOG.md`.
+2. `git tag v1.0.0 && git push origin v1.0.0`, buat rilis GitHub dari tag itu, dan unggah isi `dist/`.
 3. AUR: salin `packaging/aur/PKGBUILD`, jalankan `updpkgsums`, uji dengan `makepkg -si`, lalu `git push` ke AUR.
 4. Chrome Web Store dan AMO: unggah `dist/gesit-chrome-webstore.zip` dan `dist/gesit-firefox-amo.zip`,
    teks listing ada di [extension/STORE_LISTING.md](extension/STORE_LISTING.md), kebijakan privasi di [PRIVACY.md](PRIVACY.md).

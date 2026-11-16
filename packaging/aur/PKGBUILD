@@ -1,12 +1,12 @@
-# Maintainer: Your Name <you@example.com>
+# Maintainer: Rifal21 <giantjou77@gmail.com>
 # AUR recipe: builds from the release tarball published on GitHub (see packaging/release.sh).
-# Before submitting: replace OWNER in url/source, run `updpkgsums`, then `makepkg -si` to test.
+# Before submitting to the AUR: publish the GitHub release first, run `updpkgsums`, then `makepkg -si` to test.
 pkgname=gesit
 pkgver=1.0.0
 pkgrel=1
 pkgdesc='Fast multi-connection download manager with browser integration (Chrome, Brave, Edge, Firefox)'
 arch=('any')
-url='https://github.com/OWNER/gesit'
+url='https://github.com/Rifal21/GesitDownloadManager'
 license=('MIT')
 depends=('python' 'pyside6' 'python-httpx')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')

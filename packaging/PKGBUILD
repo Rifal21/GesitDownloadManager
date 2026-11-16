@@ -1,4 +1,4 @@
-# Maintainer: Gesit maintainers (edit before publishing)
+# Maintainer: Rifal21 <giantjou77@gmail.com>
 # Local build from this checkout:  cd packaging && makepkg -si
 # (the AUR recipe that downloads a release tarball is packaging/aur/PKGBUILD)
 pkgname=gesit
@@ -6,7 +6,7 @@ pkgver=1.0.0
 pkgrel=1
 pkgdesc='Fast multi-connection download manager with browser integration (Chrome, Brave, Edge, Firefox)'
 arch=('any')
-url='https://github.com/OWNER/gesit'
+url='https://github.com/Rifal21/GesitDownloadManager'
 license=('MIT')
 depends=('python' 'pyside6' 'python-httpx')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')

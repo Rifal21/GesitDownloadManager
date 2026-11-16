@@ -49,4 +49,4 @@ the file's own website directly to download the file, exactly as your browser wo
 
 ## Contact
 
-Questions or removal requests: open an issue at the project page listed in the store listing.
+Questions or removal requests: open an issue at https://github.com/Rifal21/GesitDownloadManager/issues

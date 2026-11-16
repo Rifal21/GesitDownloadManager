@@ -4,7 +4,7 @@
 #   packaging/release.sh              source tarball, Arch package, .deb, browser-store zips
 #   packaging/release.sh --appimage   also the AppImage (downloads CPython, wheels and appimagetool: see build_appimage.sh)
 #
-# env: GESIT_MAINTAINER="Name <mail>"  GESIT_HOMEPAGE=https://github.com/you/gesit
+# env (optional overrides): GESIT_MAINTAINER="Name <mail>"  GESIT_HOMEPAGE=https://github.com/you/repo
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

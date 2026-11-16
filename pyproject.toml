@@ -17,6 +17,10 @@ classifiers = [
     "Topic :: Internet :: WWW/HTTP",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Rifal21/GesitDownloadManager"
+Issues = "https://github.com/Rifal21/GesitDownloadManager/issues"
+
 [project.optional-dependencies]
 socks = ["httpx[socks]"]
 dev = ["pytest", "pytest-asyncio"]
