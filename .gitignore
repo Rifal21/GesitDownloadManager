@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+src/
+pkg/
+*.pkg.tar.zst
+*.zip
+*.deb
+*.AppImage
+*.pem

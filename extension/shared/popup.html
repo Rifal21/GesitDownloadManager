@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Gesit</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="" width="28" height="28">
+    <div>
+      <h1>Gesit</h1>
+      <p id="status" class="status">Checking…</p>
+    </div>
+    <label class="switch" title="Capture browser downloads">
+      <input type="checkbox" id="enabled">
+      <span></span>
+    </label>
+  </header>
+
+  <section>
+    <h2>Media on this page</h2>
+    <ul id="media"></ul>
+    <p id="empty" class="muted" hidden>Play a video or audio on the page and it will show up here.</p>
+  </section>
+
+  <footer>
+    <button id="all">Download all links</button>
+    <button id="video">Download page video</button>
+    <button id="open" class="ghost">Open Gesit</button>
+  </footer>
+  <p id="last" class="muted"></p>
+  <p id="msg" class="muted" role="status"></p>
+  <script src="popup.js"></script>
+</body>
+</html>

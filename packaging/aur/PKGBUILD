@@ -1,0 +1,42 @@
+# Maintainer: Your Name <you@example.com>
+# AUR recipe: builds from the release tarball published on GitHub (see packaging/release.sh).
+# Before submitting: replace OWNER in url/source, run `updpkgsums`, then `makepkg -si` to test.
+pkgname=gesit
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Fast multi-connection download manager with browser integration (Chrome, Brave, Edge, Firefox)'
+arch=('any')
+url='https://github.com/OWNER/gesit'
+license=('MIT')
+depends=('python' 'pyside6' 'python-httpx')
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+optdepends=('ffmpeg: HLS / stream downloads'
+            'yt-dlp: YouTube and other site videos'
+            'python-socksio: SOCKS5 proxy support')
+source=("$pkgname-$pkgver.tar.gz::$url/releases/download/v$pkgver/$pkgname-$pkgver.tar.gz")
+sha256sums=('SKIP')  # run `updpkgsums` once the tarball is uploaded
+
+build() {
+  cd "$pkgname-$pkgver"
+  python -m build --wheel --no-isolation
+  python extension/build.py
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  python -m installer --destdir="$pkgdir" dist/*.whl
+
+  install -Dm644 packaging/gesit.desktop "$pkgdir/usr/share/applications/gesit.desktop"
+  install -Dm644 packaging/gesit.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/gesit.svg"
+  for s in 16 24 32 48 64 128 256 512; do
+    install -Dm644 "packaging/icons/hicolor/${s}x${s}/apps/gesit.png" \
+      "$pkgdir/usr/share/icons/hicolor/${s}x${s}/apps/gesit.png"
+  done
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+  install -dm755 "$pkgdir/usr/share/gesit/extension"
+  cp -r extension/dist/chrome extension/dist/firefox "$pkgdir/usr/share/gesit/extension/"
+  install -Dm644 extension/dist/gesit-firefox.xpi "$pkgdir/usr/share/gesit/extension/gesit-firefox.xpi"
+
+  python packaging/system_manifests.py "$pkgdir"
+}
