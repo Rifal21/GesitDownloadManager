@@ -63,7 +63,8 @@ def test_download_later_waits_for_queue(mgr, server):
     assert mgr.get(a.id).status == QUEUED
     mgr.start_queue()
     assert wait_for(lambda: mgr.get(a.id).status == COMPLETE and mgr.get(b.id).status == COMPLETE)
-    assert not mgr.queue_running
+    # the flag is cleared by the manager thread right after the last status change
+    assert wait_for(lambda: not mgr.queue_running)
 
 
 def test_queue_respects_max_active(mgr, server):
