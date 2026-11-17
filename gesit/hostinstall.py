@@ -109,8 +109,100 @@ def make_wrapper(path: str) -> str:
     return path
 
 
+# ------------------------------------------------------------------------------- Windows
+# HKCU\<key>\app.gesit.host = path of the manifest JSON (browsers on Windows find hosts through the registry)
+WIN_REGISTRY = {
+    "Google Chrome": (r"Software\Google\Chrome\NativeMessagingHosts", False),
+    "Chromium": (r"Software\Chromium\NativeMessagingHosts", False),
+    "Microsoft Edge": (r"Software\Microsoft\Edge\NativeMessagingHosts", False),
+    "Brave": (r"Software\BraveSoftware\Brave-Browser\NativeMessagingHosts", False),
+    "Vivaldi": (r"Software\Vivaldi\NativeMessagingHosts", False),
+    "Firefox": (r"Software\Mozilla\NativeMessagingHosts", True),
+}
+
+
+class WinRegistry:
+    """HKEY_CURRENT_USER access; replaced by a fake in tests so the logic runs on Linux."""
+
+    def set_default(self, key: str, value: str) -> None:
+        import winreg
+
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key) as k:
+            winreg.SetValueEx(k, "", 0, winreg.REG_SZ, value)
+
+    def get_default(self, key: str) -> str | None:
+        import winreg
+
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key) as k:
+                return winreg.QueryValueEx(k, "")[0]
+        except OSError:
+            return None
+
+    def delete(self, key: str) -> bool:
+        import winreg
+
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key)
+            return True
+        except OSError:
+            return False
+
+
+def _registry() -> WinRegistry:
+    return WinRegistry()
+
+
+def _win_manifest_path(manifest_dir: str, firefox: bool) -> str:
+    return os.path.join(manifest_dir, HOST_NAME + (".firefox.json" if firefox else ".json"))
+
+
+def setup_windows(host: str, manifest_dir: str, reg: WinRegistry | None = None,
+                  extra_ids: list[str] | None = None) -> list[str]:
+    """Write the two manifests and register them for every supported browser. Returns browser names."""
+    reg = reg or _registry()
+    os.makedirs(manifest_dir, exist_ok=True)
+    for firefox in (False, True):
+        with open(_win_manifest_path(manifest_dir, firefox), "w") as f:
+            json.dump(_manifest(host, firefox, extra_ids), f, indent=2)
+    names = []
+    for name, (key, firefox) in WIN_REGISTRY.items():
+        reg.set_default(f"{key}\\{HOST_NAME}", _win_manifest_path(manifest_dir, firefox))
+        names.append(name)
+    return names
+
+
+def uninstall_windows(manifest_dir: str, reg: WinRegistry | None = None) -> list[str]:
+    reg = reg or _registry()
+    removed = [n for n, (key, _fx) in WIN_REGISTRY.items() if reg.delete(f"{key}\\{HOST_NAME}")]
+    for firefox in (False, True):
+        try:
+            os.remove(_win_manifest_path(manifest_dir, firefox))
+        except OSError:
+            pass
+    return removed
+
+
+def _win_manifest_dir() -> str:
+    return os.path.join(paths.data_dir(), "native-messaging")
+
+
+def _win_host_launcher() -> str:
+    """gesit-native-host.exe next to gesit.exe (installed build), else a .bat that runs the source checkout."""
+    if getattr(sys, "frozen", False):
+        return os.path.join(os.path.dirname(sys.executable), "gesit-native-host.exe")
+    bat = os.path.join(paths.data_dir(), "gesit-native-host.bat")
+    os.makedirs(os.path.dirname(bat), exist_ok=True)
+    pkg_parent = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(bat, "w") as f:
+        f.write(f'@echo off\r\nset "PYTHONPATH={pkg_parent}"\r\n"{sys.executable}" -m gesit.native_host %*\r\n')
+    return bat
+
+
 def default_host_launcher() -> str:
     """Pick the right launcher for how Gesit is installed."""
+    if sys.platform == "win32":
+        return _win_host_launcher()
     appimage = os.environ.get("APPIMAGE")
     if appimage:
         return write_standalone_host(os.path.join(paths.data_dir(), "gesit-native-host"), appimage)
@@ -122,7 +214,8 @@ def default_host_launcher() -> str:
 
 # --------------------------------------------------------------------- extension files
 def _find_extension_dir() -> str | None:
-    cands = [os.environ.get("GESIT_EXT_DIR"), os.path.join(sys.prefix, "share/gesit/extension"),
+    frozen = os.path.join(os.path.dirname(sys.executable), "extension") if getattr(sys, "frozen", False) else None
+    cands = [os.environ.get("GESIT_EXT_DIR"), frozen, os.path.join(sys.prefix, "share/gesit/extension"),
              os.path.join(paths.data_dir(), "extension"), "/usr/share/gesit/extension"]
     for c in cands:
         if c and os.path.isdir(os.path.join(c, "chrome")):
@@ -185,6 +278,8 @@ def install_flatpak(extra_ids: list[str] | None = None) -> list[tuple[str, str |
 
 
 def uninstall() -> list[str]:
+    if sys.platform == "win32":
+        return uninstall_windows(_win_manifest_dir())
     removed = []
     for name, path, _fx, _root in _targets():
         if os.path.exists(path):
@@ -211,14 +306,21 @@ def uninstall_flatpak() -> list[str]:
 def setup(extra_ids: list[str] | None = None) -> dict:
     """Everything needed for browser integration. Returns a summary for the CLI / the GUI."""
     wrapper = default_host_launcher()
-    browsers = install(wrapper, extra_ids)
-    flat = install_flatpak(extra_ids)
+    if sys.platform == "win32":
+        browsers = setup_windows(wrapper, _win_manifest_dir(), extra_ids=extra_ids)
+        flat = []
+    else:
+        browsers = install(wrapper, extra_ids)
+        flat = install_flatpak(extra_ids)
     ext_dir = install_extension_files()
     return {"host": wrapper, "browsers": browsers, "flatpak": flat, "extension_dir": ext_dir}
 
 
 def is_integrated() -> bool:
     """True if any user-level or system-wide manifest exists (used to decide whether to offer setup)."""
+    if sys.platform == "win32":
+        reg = _registry()
+        return any(reg.get_default(f"{key}\\{HOST_NAME}") for key, _fx in WIN_REGISTRY.values())
     if any(os.path.exists(p) for _n, p, _f, _r in _targets()):
         return True
     if any(os.path.exists(os.path.join(HOME, ".var", "app", a, rel, HOST_NAME + ".json"))

@@ -8,6 +8,7 @@ import subprocess
 from concurrent.futures import Future
 from typing import Callable
 
+from ..core import osutil
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QLinearGradient, QPainter, QPen
 from PySide6.QtWidgets import QWidget
@@ -99,6 +100,10 @@ def open_path(path: str) -> None:
 
 def open_folder(path: str) -> None:
     """Open the containing folder, selecting the file when the file manager supports it."""
+    cmd = osutil.reveal_command(path)
+    if cmd:  # Windows Explorer
+        subprocess.Popen(cmd)
+        return
     if os.path.isfile(path) and shutil.which("dbus-send"):
         try:
             subprocess.run(

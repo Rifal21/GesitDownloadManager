@@ -5,6 +5,10 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="POSIX paths, Unix sockets and XDG directories")
+
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 

@@ -1,0 +1,43 @@
+name: Windows build
+# Builds the installer and portable zip on a real Windows runner, smoke-tests the installed app,
+# and attaches the files to the GitHub release when a v* tag is pushed.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # needed to attach files to the release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Build (tests, PyInstaller, ffmpeg + yt-dlp, installer, portable zip)
+        shell: pwsh
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ./packaging/windows/build_windows.ps1
+      - name: Smoke test the installed app
+        shell: pwsh
+        run: ./packaging/windows/smoke_test.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gesit-windows
+          path: |
+            dist/Gesit-*-windows-*
+            dist/SHA256SUMS-windows.txt
+      - name: Attach to the GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Gesit-*-windows-*
+            dist/SHA256SUMS-windows.txt

@@ -1,8 +1,8 @@
 # Gesit
 
-Download manager multi-koneksi untuk Linux, dengan ekstensi browser yang mengambil alih download dan video
+Download manager multi-koneksi untuk **Linux dan Windows**, dengan ekstensi browser yang mengambil alih download dan video
 dari Chrome, Chromium, Brave, Edge, Vivaldi, dan Firefox. Rancangan teknis ada di [DESIGN.md](DESIGN.md),
-rencana Windows di [docs/WINDOWS.md](docs/WINDOWS.md).
+catatan Windows di [docs/WINDOWS.md](docs/WINDOWS.md).
 
 ## Fitur
 
@@ -13,6 +13,19 @@ rencana Windows di [docs/WINDOWS.md](docs/WINDOWS.md).
 - Dialog Download File Info, dialog progress dengan bar bersegmen dan tabel koneksi
 - Video: HLS/DASH lewat ffmpeg, YouTube dan situs lain lewat yt-dlp
 - Proxy HTTP/SOCKS5, login per situs, tray icon (atau berjalan tersembunyi di GNOME), notifikasi
+
+## Pasang di Windows
+
+Unduh `Gesit-<versi>-windows-x64-setup.exe` dari halaman Releases dan jalankan (per-pengguna, tanpa hak administrator).
+Installer sudah menyertakan ffmpeg dan yt-dlp, dan menawarkan integrasi browser serta start otomatis saat masuk.
+Versi portable: `Gesit-<versi>-windows-x64-portable.zip`, ekstrak lalu jalankan `gesit.exe`; setelah itu pilih
+**Tasks → Set up browser integration**.
+
+Windows SmartScreen bisa memberi peringatan "aplikasi tidak dikenal" selama installer belum ditandatangani sertifikat kode:
+klik *More info → Run anyway*. Cocokkan checksum dengan `SHA256SUMS-windows.txt`.
+
+Ekstensi: Edge, Chrome, Brave, Vivaldi memakai folder `chrome`, Firefox memakai `firefox`, keduanya di
+`%LOCALAPPDATA%\Gesit\extension` (atau folder instalasi, subfolder `extension`).
 
 ## Pasang di Linux
 
@@ -60,13 +73,14 @@ Popup ekstensi menampilkan keputusan terakhir ("sent to Gesit" / "left to the br
 
 | Path | Isi |
 |---|---|
-| `~/.config/gesit/config.json` | Pengaturan (izin 0600) |
-| `~/.local/share/gesit/downloads.db` | Daftar download (izin 0600). Jika rusak, dipindah ke `downloads.db.corrupt-*` |
-| `$XDG_RUNTIME_DIR/gesit/gesit.sock` | Socket IPC, hanya untuk pengguna ini |
+| `~/.config/gesit/config.json` (Windows: `%APPDATA%\Gesit`) | Pengaturan (izin 0600 di Linux) |
+| `~/.local/share/gesit/downloads.db` (Windows: `%LOCALAPPDATA%\Gesit`) | Daftar download. Jika rusak, dipindah ke `downloads.db.corrupt-*` |
+| `$XDG_RUNTIME_DIR/gesit/gesit.sock` | Socket IPC di Linux, hanya untuk pengguna ini |
+| `%LOCALAPPDATA%\Gesit\ipc.json` | Di Windows: port 127.0.0.1 acak dan token sesi, hanya terbaca oleh akun kamu |
 | `<file>.part` + `<file>.gesit` | Data parsial dan status segmen selama download |
 
 CLI: `gesit [URL...]`, `gesit --background`, `gesit --quit`, `gesit --install-host [--autostart] [--extension-id ID]`,
-`gesit --uninstall-host`, `gesit --version`.
+`gesit --uninstall-host`, `gesit --enable-autostart`, `gesit --disable-autostart`, `gesit --version`.
 
 ## Pengembangan
 
@@ -78,7 +92,13 @@ python extension/build.py                    # extension/dist/{chrome,firefox,ge
 python packaging/make_icons.py               # buat ulang semua ikon dari gesit/gui/icons.py
 ```
 
-## Membuat rilis
+## Membuat rilis Windows
+
+Otomatis: dorong tag `v*` ke GitHub, workflow **Windows build** (`.github/workflows/windows.yml`) menjalankan tes, PyInstaller, Inno Setup,
+uji asap installer (pasang senyap, native host, download, copot), lalu melampirkan installer dan zip portable ke rilis.
+Manual di Windows: `powershell -ExecutionPolicy Bypass -File packaging\windows\build_windows.ps1` (butuh Python 3.11+ dan Inno Setup 6).
+
+## Membuat rilis Linux
 
 ```sh
 ./packaging/release.sh               # tarball, paket Arch, .deb, zip toko ekstensi, SHA256SUMS di dist/
@@ -100,6 +120,6 @@ Urutan publikasi:
 - Download via yt-dlp dan HLS tidak bisa di-resume dan tidak memakai speed limiter
 - Tray icon di GNOME butuh ekstensi AppIndicator; tanpa itu Gesit tetap berjalan tersembunyi saat jendela ditutup
 - Di Firefox, jika "Always ask where to save files" aktif, dialog browser muncul lebih dulu (API Firefox tidak mengizinkan mencegahnya)
-- Windows: belum didukung, lihat [docs/WINDOWS.md](docs/WINDOWS.md)
+- Windows: installer belum ditandatangani sertifikat kode (SmartScreen akan memperingatkan), dan hanya diuji otomatis di runner Windows GitHub Actions; lihat [docs/WINDOWS.md](docs/WINDOWS.md)
 
 Proyek independen, tidak berafiliasi dengan produsen download manager komersial mana pun.

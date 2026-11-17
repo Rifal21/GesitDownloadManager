@@ -14,7 +14,7 @@ from PySide6.QtGui import QAction, QGuiApplication
 from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from .. import __version__
-from ..core import ipc, util
+from ..core import ipc, osutil, util
 from ..core.config import CONFIG_PATH, DB_PATH, Config, migrate_legacy
 from ..core.db import Database
 from ..core.manager import Manager
@@ -333,7 +333,7 @@ class GesitApp:
         box = QMessageBox(QMessageBox.Icon.Warning, "Gesit", "The computer will turn off in 30 seconds.",
                           QMessageBox.StandardButton.Cancel, None)
         box.setWindowIcon(icons.icon("app"))
-        QTimer.singleShot(30000, lambda: (box.isVisible() and (box.accept(), subprocess.Popen(["systemctl", "poweroff"]))))
+        QTimer.singleShot(30000, lambda: (box.isVisible() and (box.accept(), osutil.power_action("poweroff"))))
         box.show()
 
     # -------------------------------------------------------------------- IPC
@@ -432,17 +432,37 @@ def describe_setup(res: dict) -> str:
 
 
 def enable_autostart() -> str:
-    d = os.path.join(os.path.expanduser("~/.config"), "autostart")
-    os.makedirs(d, exist_ok=True)
-    exe = os.environ.get("APPIMAGE") or shutil.which("gesit") or f"{sys.executable} -m gesit"
-    with open(os.path.join(d, "gesit.desktop"), "w") as f:
-        f.write(f"[Desktop Entry]\nType=Application\nName=Gesit\nExec={exe} --background\nIcon=gesit\n"
-                "X-GNOME-Autostart-enabled=true\n")
-    return "Autostart enabled: Gesit starts hidden at login."
+    return osutil.enable_autostart()
+
+
+CLI_FLAGS = ("--version", "--install-host", "--uninstall-host", "--quit", "--enable-autostart", "--disable-autostart")
+
+
+def _attach_console() -> None:
+    """A windowed Windows build has no stdout; reuse the parent terminal so CLI flags can print."""
+    if sys.platform != "win32" or sys.stdout is not None:
+        return
+    try:
+        import ctypes
+
+        if ctypes.windll.kernel32.AttachConsole(-1):  # ATTACH_PARENT_PROCESS
+            sys.stdout = open("CONOUT$", "w", encoding="utf-8")
+            sys.stderr = sys.stdout
+    except (OSError, AttributeError):
+        pass
 
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if any(a in CLI_FLAGS for a in argv):
+        _attach_console()
+    if "--enable-autostart" in argv:
+        print(osutil.enable_autostart())
+        return 0
+    if "--disable-autostart" in argv:
+        osutil.disable_autostart()
+        print("Autostart disabled.")
+        return 0
     if "--version" in argv:
         print(f"Gesit {__version__}")
         return 0

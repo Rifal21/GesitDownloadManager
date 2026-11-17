@@ -24,7 +24,7 @@ the file's own website directly to download the file, exactly as your browser wo
 - The extension keeps a few settings in the browser's local extension storage: the on/off switch, the
   capture rules copied from the Gesit application, and the last capture decision (shown in the popup).
 - Detected media addresses for each tab are kept in memory only while the tab is open.
-- The Gesit application stores its download list on your computer (`~/.local/share/gesit/downloads.db`, readable only by
+- The Gesit application stores its download list on your computer (`~/.local/share/gesit/downloads.db` on Linux, `%LOCALAPPDATA%\Gesit\downloads.db` on Windows; readable only by
   your user). Delete a download from the list to delete its record.
 
 ## What is never done

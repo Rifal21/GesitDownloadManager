@@ -19,7 +19,7 @@ from typing import Any, Callable
 from ..engine import downloader as dl
 from ..engine.limiter import SpeedLimiter
 from ..engine.media import HLSJob, YtdlpJob
-from . import util
+from . import osutil, util
 from .config import Config, category_for
 from .db import Database
 from .models import ACTIVE, COMPLETE, CONNECTING, DOWNLOADING, ERROR, QUEUED, STOPPED, Item
@@ -231,14 +231,15 @@ class Manager:
             if not it:
                 continue
             job = self._jobs.get(i)
+            task = self._tasks.get(i)
             if job:
                 job.stop()
-                task = self._tasks.get(i)
-                if task:
-                    task.cancel()
-            self._delete_partials(it)
-            if delete_files and it.filename:
-                self._rm(it.path)
+            if task and not task.done():
+                task.cancel()
+                # Windows refuses to delete a file that is still open: wait until the job closed it
+                task.add_done_callback(lambda _t, it=it, df=delete_files: self._remove_files(it, df))
+            else:
+                self._remove_files(it, delete_files)
             with self._lock:
                 self.items.pop(i, None)
             self._jobs.pop(i, None)
@@ -345,7 +346,7 @@ class Manager:
         if act == "exit":
             self._emit("request_exit", None)
         elif act in ("suspend", "poweroff"):
-            subprocess.Popen(["systemctl", act], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            osutil.power_action(act, delay_s=30)
 
     # ------------------------------------------------------------------- jobs
     def _request(self, it: Item, save_dir: str | None = None) -> dl.Request:
@@ -477,6 +478,11 @@ class Manager:
                 os.remove(path)
         except OSError:
             pass
+
+    def _remove_files(self, it: Item, delete_final: bool) -> None:
+        self._delete_partials(it)
+        if delete_final and it.filename:
+            self._rm(it.path)
 
     def _delete_partials(self, it: Item) -> None:
         if it.filename and it.save_dir:

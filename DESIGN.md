@@ -166,5 +166,7 @@ membangun), `.deb` (divalidasi `python-debian`), paket toko ekstensi, `install.s
 
 Skrip AppImage (`packaging/build_appimage.sh`) sudah ditulis tetapi belum pernah dijalankan.
 
-Belum: Site Grabber penuh, FTP, refresh link kedaluwarsa, resume untuk job HLS/yt-dlp, Windows (lihat docs/WINDOWS.md).
+Windows (1.1.0): IPC TCP + token, native host berbasis registry, installer Inno Setup, CI; lihat docs/WINDOWS.md.
+
+Belum: Site Grabber penuh, FTP, refresh link kedaluwarsa, resume untuk job HLS/yt-dlp, tanda tangan kode Windows.
 Ekstensi diuji dengan harness Node yang meniru API browser; pemuatan di Chrome/Firefox asli perlu dilakukan manual.

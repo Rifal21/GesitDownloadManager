@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.1.0 (2026-11-17)
+
+Windows support.
+
+### Windows
+- Installer (`Gesit-1.1.0-windows-x64-setup.exe`, per-user, no administrator needed) and a portable zip
+- Browser integration for Chrome, Edge, Brave, Vivaldi, Chromium and Firefox through the registry-based native messaging host
+- ffmpeg and yt-dlp are bundled in the installer (checksum-verified at build time)
+- Optional start at sign-in; "when finished" actions use `shutdown` and suspend
+- IPC uses 127.0.0.1 with a random port and a per-session token stored in your profile; web pages cannot talk to Gesit
+- Built and smoke-tested on a Windows runner in GitHub Actions (silent install, native host, download, uninstall)
+
+### Both platforms
+- Downloads are written in binary mode (required on Windows, no change on Linux)
+- Windows file-name rules (reserved names such as CON/NUL, trailing dots and spaces)
+- Removing a download deletes its partial files only after the connection released them
+- `gesit --enable-autostart` / `--disable-autostart`
+
+
 ## 1.0.0 (2026-11-16)
 
 First public release of Gesit (previously developed under the working name LIDM).

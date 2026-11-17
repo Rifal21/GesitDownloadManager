@@ -125,6 +125,7 @@ def test_remove_and_remove_completed(mgr, server):
     assert not os.path.exists(p2)
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix sockets")
 def test_ipc_roundtrip(tmp_path):
     sock = str(tmp_path / "s.sock")
 
@@ -143,6 +144,7 @@ def test_ipc_roundtrip(tmp_path):
     assert oct(os.stat(tmp_path).st_mode & 0o777)  # dir exists
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix sockets")
 def test_native_host_bridge(tmp_path):
     sock_dir = tmp_path / "run"
     sock_dir.mkdir()

@@ -3,6 +3,10 @@ import subprocess
 import sys
 import textwrap
 
+import pytest
+
+pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="XDG directories and tray-less Linux desktop")
+
 
 def test_closing_window_without_tray_keeps_gesit_running(tmp_path):
     """GNOME has no tray: the X button must hide Gesit, not quit it (browser integration depends on it)."""

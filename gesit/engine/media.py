@@ -16,7 +16,7 @@ from typing import Callable
 
 import httpx
 
-from ..core import util
+from ..core import osutil, util
 from .downloader import (
     COMPLETE, CONNECTING, DOWNLOADING, ERROR, IDLE, PAUSED,
     DownloadError, Request, build_headers, make_client,
@@ -98,8 +98,9 @@ class _ProcessJob:
             await proc.wait()
 
     async def _spawn(self, *argv: str) -> asyncio.subprocess.Process:
+        kwargs = {"creationflags": osutil.NO_WINDOW} if osutil.WINDOWS else {}
         return await asyncio.create_subprocess_exec(
-            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            *argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, **kwargs
         )
 
 
@@ -129,8 +130,9 @@ class HLSJob(_ProcessJob):
         self._set(CONNECTING)
         out_dir = self.req.save_dir
         try:
-            if not shutil.which("ffmpeg"):
-                raise DownloadError("ffmpeg is not installed (pacman -S ffmpeg)")
+            ffmpeg = osutil.tool_path("ffmpeg")
+            if not ffmpeg:
+                raise DownloadError("ffmpeg is not installed (Linux: your package manager; Windows: reinstall Gesit with the tools option)")
             os.makedirs(out_dir, exist_ok=True)
             url, duration = await self._resolve_playlist()
             name = self.filename or util.sanitize_filename(
@@ -142,7 +144,7 @@ class HLSJob(_ProcessJob):
             part = os.path.join(out_dir, self.filename + ".part")
             hdrs = "".join(f"{k}: {v}\r\n" for k, v in build_headers(self.req).items() if k != "Accept-Encoding")
             self._proc = await self._spawn(
-                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1",
+                ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1",
                 "-headers", hdrs, "-i", url, "-c", "copy", "-bsf:a", "aac_adtstoasc", "-f", "mp4", part,
             )
             self._set(DOWNLOADING)
@@ -218,10 +220,10 @@ class YtdlpJob(_ProcessJob):
     async def run(self) -> None:
         self._stopping = False
         self._set(CONNECTING)
-        exe = shutil.which("yt-dlp") or os.path.expanduser("~/.local/bin/yt-dlp")
+        exe = osutil.tool_path("yt-dlp")
         try:
-            if not os.path.exists(exe):
-                raise DownloadError("yt-dlp is not installed (pacman -S yt-dlp)")
+            if not exe:
+                raise DownloadError("yt-dlp is not installed (Linux: your package manager; Windows: reinstall Gesit with the tools option)")
             os.makedirs(self.req.save_dir, exist_ok=True)
             argv = [
                 exe, "--no-playlist", "--newline", "--no-colors", "--no-simulate",
@@ -232,6 +234,9 @@ class YtdlpJob(_ProcessJob):
                 "--print", f"before_dl:{_TAG_NAME}%(title).150B.%(ext)s",
                 "--print", f"after_move:{_TAG_FILE}%(filepath)s",
             ]
+            ffmpeg = osutil.tool_path("ffmpeg")
+            if ffmpeg:  # yt-dlp needs ffmpeg to merge video and audio streams
+                argv += ["--ffmpeg-location", os.path.dirname(ffmpeg)]
             if self.req.proxy:
                 argv += ["--proxy", self.req.proxy]
             if self.req.referer:

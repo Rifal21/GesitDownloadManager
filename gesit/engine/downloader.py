@@ -407,7 +407,7 @@ class Downloader:
             pass
 
     def _open_file(self) -> None:
-        flags = os.O_RDWR | os.O_CREAT
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0)  # O_BINARY: Windows text mode corrupts data
         self._fd = os.open(self.part_path, flags, 0o644)
         if self.total and os.fstat(self._fd).st_size != self.total:
             try:

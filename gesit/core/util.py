@@ -5,6 +5,7 @@ from __future__ import annotations
 import mimetypes
 import os
 import re
+import sys
 import urllib.parse
 
 
@@ -44,8 +45,19 @@ def human_time(seconds: float | None) -> str:
 _BAD_CHARS = re.compile(r'[\x00-\x1f/\\:*?"<>|]')
 
 
-def sanitize_filename(name: str, fallback: str = "download") -> str:
+_WIN_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
+
+
+def sanitize_filename(name: str, fallback: str = "download", windows: bool | None = None) -> str:
+    """Make `name` safe as a single path component. Windows rules (reserved device names, trailing dots and
+    spaces) are applied on Windows, or when windows=True (so the logic is testable everywhere)."""
+    windows = (sys.platform == "win32") if windows is None else windows
     name = _BAD_CHARS.sub("_", name).strip().strip(".")
+    if windows:
+        name = name.rstrip(" .")
+        stem = name.split(".", 1)[0].rstrip(" ")
+        if stem.upper() in _WIN_RESERVED:
+            name = "_" + name
     if not name:
         return fallback
     if len(name.encode("utf-8")) > 240:

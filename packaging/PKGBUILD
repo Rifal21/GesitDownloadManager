@@ -2,7 +2,7 @@
 # Local build from this checkout:  cd packaging && makepkg -si
 # (the AUR recipe that downloads a release tarball is packaging/aur/PKGBUILD)
 pkgname=gesit
-pkgver=1.0.0
+pkgver=1.1.0
 pkgrel=1
 pkgdesc='Fast multi-connection download manager with browser integration (Chrome, Brave, Edge, Firefox)'
 arch=('any')

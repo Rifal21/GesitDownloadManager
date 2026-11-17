@@ -40,6 +40,10 @@ class Database:
             # corrupt / not a database: keep it for inspection and start a fresh list instead of refusing to start
             if path == ":memory:":
                 raise
+            try:
+                self._db.close()  # Windows cannot rename a file that is still open
+            except (AttributeError, sqlite3.Error):
+                pass
             self.recovered_from = f"{path}.corrupt-{int(time.time())}"
             os.replace(path, self.recovered_from)
             self._open(path)

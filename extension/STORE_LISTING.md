@@ -17,7 +17,7 @@ https://github.com/Rifal21/GesitDownloadManager/issues
 https://github.com/Rifal21/GesitDownloadManager/blob/main/PRIVACY.md
 
 ## Short description (max 132 characters)
-Send downloads and videos from your browser to Gesit, the fast multi-connection download manager for Linux.
+Send downloads and videos from your browser to Gesit, the fast multi-connection download manager for Linux and Windows.
 
 ## Category
 Chrome Web Store: Tools (or Productivity). AMO: Download Management.
@@ -25,7 +25,7 @@ Chrome Web Store: Tools (or Productivity). AMO: Download Management.
 ## Detailed description (English)
 Gesit Integration connects your browser to **Gesit**, a fast multi-connection download manager for Linux.
 
-**Requires the free Gesit desktop application** (AppImage, .deb, or Arch package). The extension does nothing by
+**Requires the free Gesit desktop application** (Windows installer, Linux AppImage, .deb, or Arch package). The extension does nothing by
 itself: it only forwards downloads to the app running on your own computer.
 
 What you get
@@ -67,7 +67,7 @@ Hand browser downloads and detected videos over to the Gesit download manager in
 
 ## Notes for reviewers (paste in "Test instructions")
 The extension forwards downloads to a native desktop application, so it cannot show any result without it installed.
-Install Gesit for Linux from the project page, run it once, choose Tasks > "Set up browser integration", then click any
+Install Gesit (Windows installer or Linux package) from the project page, run it once, choose Tasks > "Set up browser integration", then click any
 downloadable link (for example a .zip) in the browser. The popup shows the last capture decision and whether the app
 is connected. If Gesit is not running, the extension leaves the browser download untouched.
 
