@@ -217,7 +217,7 @@ class HLSJob(_ProcessJob):
 
 # --------------------------------------------------------------------- yt-dlp
 # line markers printed by yt-dlp (see the --print / --progress-template arguments below)
-_TAG_NAME, _TAG_FILE, _TAG_PROGRESS = "GESITN ", "GESITF ", "GESITP "
+_TAG_NAME, _TAG_FILE, _TAG_PROGRESS, _TAG_SIZE = "GESITN ", "GESITF ", "GESITP ", "GESITS "
 
 
 def _mp4_args(have_ffmpeg: bool) -> list[str]:
@@ -376,12 +376,15 @@ class YtdlpJob(_ProcessJob):
     async def _attempt(self, exe: str, cookie_file: str | None) -> str | None:
         """One yt-dlp run. Returns the final path, None when stopped, raises DownloadError on failure."""
         argv = [
-            exe, "--no-playlist", "--newline", "--no-colors", "--no-simulate",
+            # --progress: --print puts yt-dlp in quiet mode, and quiet mode switches the progress lines off
+            exe, "--no-playlist", "--newline", "--no-colors", "--no-simulate", "--progress",
             "-o", os.path.join(self.req.save_dir, "%(title).150B.%(ext)s"),
             "--progress-template",
             f"download:{_TAG_PROGRESS}%(progress.downloaded_bytes)s %(progress.total_bytes)s "
             "%(progress.total_bytes_estimate)s %(progress.speed)s",
             "--print", f"before_dl:{_TAG_NAME}%(title).150B.%(ext)s",
+            # whole size of the download: for video + audio yt-dlp reports the sum in filesize_approx
+            "--print", f"before_dl:{_TAG_SIZE}%(filesize,filesize_approx)s",
             "--print", f"after_move:{_TAG_FILE}%(filepath)s",
         ]
         ffmpeg = osutil.tool_path("ffmpeg")
@@ -401,17 +404,28 @@ class YtdlpJob(_ProcessJob):
         err_task = asyncio.create_task(self._proc.stderr.read())
         self._set(DOWNLOADING)
         final = None
+        expected: int | None = None   # size of everything yt-dlp is going to fetch (video + audio)
+        base = 0                      # bytes of streams that are already finished
+        last_done, last_tot = 0, None
         async for raw in self._proc.stdout:
             line = raw.decode("utf-8", "ignore").rstrip()
             if line.startswith(_TAG_NAME):
                 self.filename = util.sanitize_filename(line[len(_TAG_NAME):])
+            elif line.startswith(_TAG_SIZE):
+                v = line[len(_TAG_SIZE):].strip()
+                expected = int(float(v)) if re.fullmatch(r"\d+(\.\d+)?", v) else None
             elif line.startswith(_TAG_FILE):
                 final = line[len(_TAG_FILE):]
             elif line.startswith(_TAG_PROGRESS):
                 parts = line.split()[1:]
                 nums = [float(p) if re.fullmatch(r"[\d.]+", p) else None for p in parts] + [None] * 4
                 done, tot, est, spd = nums[:4]
-                self._update_progress(int(done or 0), int(tot or est or 0) or None, spd or 0.0)
+                done, stream_tot = int(done or 0), int(tot or est or 0) or None
+                if done < last_done and stream_tot != last_tot:   # video finished, the audio stream began
+                    base += last_done
+                last_done, last_tot = done, stream_tot
+                total = max(expected or 0, base + (stream_tot or 0)) or None
+                self._update_progress(base + done, total, spd or 0.0)
         rc = await self._proc.wait()
         err = (await err_task).decode("utf-8", "ignore").strip()
         if self._stopping:

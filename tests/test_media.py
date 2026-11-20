@@ -190,8 +190,15 @@ if fail == "both" or (fail == "cookies" and with_cookies) or (fail == "plain" an
     sys.stderr.write("WARNING: noise\\nERROR: " + ("session rotated" if with_cookies else "Sign in to confirm") + "\\n")
     sys.exit(1)
 out = args[args.index("-o") + 1].replace("%(title).150B.%(ext)s", "video.mp4")
-open(out, "wb").write(b"x" * 2048)
 print("GESITN video.mp4")
+if os.environ.get("FAKE_PROGRESS"):
+    print("GESITS 1500")
+    if "--progress" in args:  # like the real thing: --print makes it quiet, --progress brings the lines back
+        for done in (100, 500, 1000):                      # video stream
+            print(f"GESITP {{done}} 1000 NA {{done * 10}}.5", flush=True)
+        for done in (250, 500):                            # audio stream: the counter starts again
+            print(f"GESITP {{done}} 500 NA 900.25", flush=True)
+open(out, "wb").write(b"x" * 2048)
 print("GESITF " + out)
 """)
     exe.chmod(0o755)
@@ -327,3 +334,66 @@ def test_user_tools_folder_is_searched_before_path(tmp_path, monkeypatch):
     monkeypatch.setenv("PATH", str(tmp_path / "nothing"))
     assert osutil.tool_path("yt-dlp") == str(tools / "yt-dlp")
     assert osutil.user_tools_dir() == str(tools)
+
+
+def test_ytdlp_progress_covers_video_and_audio_as_one_download(fake_ytdlp, tmp_path, monkeypatch):
+    """Without --progress yt-dlp printed no progress at all (bar stuck, 'Receiving data...' then suddenly complete);
+    video and audio are separate streams and the byte counter restarts for the second one."""
+    import asyncio
+    from gesit.engine.downloader import Request
+    from gesit.engine.media import YtdlpJob
+
+    monkeypatch.setenv("FAKE_PROGRESS", "1")
+    job = YtdlpJob(Request(url="https://vimeo.com/1", save_dir=str(tmp_path / "out")))
+    seen = []
+    job.on_change = lambda: seen.append((job.status, job.downloaded, job.total, job.speed))
+    asyncio.run(job.run())
+    assert job.status == COMPLETE
+    live = [(d, t, sp) for st, d, t, sp in seen if st == "downloading" and d]
+    assert len(live) == 5, live
+    downs = [d for d, _, _ in live]
+    assert downs == sorted(downs), f"progress went backwards: {downs}"
+    assert downs == [100, 500, 1000, 1250, 1500]          # audio continues after the video, not from zero
+    assert all(t == 1500 for _, t, _ in live)              # one total for the whole download
+    assert live[0][2] == 1000.5 and live[3][2] == 900.25   # speed is passed through
+    assert max(downs) <= 1500
+
+
+@pytest.mark.skipif(not HAVE_YTDLP, reason="yt-dlp not installed")
+def test_real_ytdlp_reports_progress_while_downloading(tmp_path):
+    """The real yt-dlp: a file that takes a moment to arrive must give several progress steps."""
+    import asyncio
+    from gesit.engine.downloader import Request
+    from gesit.engine.media import YtdlpJob
+
+    root = tmp_path / "www"
+    root.mkdir()
+    subprocess.run(
+        ["ffmpeg", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=duration=6:size=640x360:rate=25",
+         "-c:v", "libx264", "-b:v", "3M", "-pix_fmt", "yuv420p", str(root / "big.mp4")], check=True, timeout=90,
+    )
+
+    class Slow(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *a, **k):
+            super().__init__(*a, directory=str(root), **k)
+
+        def copyfile(self, src, dst):
+            while chunk := src.read(32768):
+                dst.write(chunk)
+                time.sleep(0.01)
+
+        def log_message(self, *a):
+            pass
+
+    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Slow)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    try:
+        job = YtdlpJob(Request(url=f"http://127.0.0.1:{httpd.server_address[1]}/big.mp4", save_dir=str(tmp_path / "out")))
+        seen = []
+        job.on_change = lambda: seen.append((job.status, job.downloaded, job.total))
+        asyncio.run(job.run())
+    finally:
+        httpd.shutdown()
+    assert job.status == COMPLETE, job.error
+    steps = [(d, t) for st, d, t in seen if st == "downloading" and d and t and d < t]
+    assert len(steps) >= 3, f"no live progress: {seen[:6]}"

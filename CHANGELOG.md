@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.4 (2026-11-20)
+
+### Video downloads
+- Fixed yt-dlp downloads showing no progress: the bar stayed at 0% with "Receiving data..." and the file suddenly turned complete. yt-dlp is in quiet mode whenever Gesit asks it for file names, and quiet mode switches its progress lines off; Gesit now asks for them explicitly
+- Video and audio are fetched as two streams; the progress now covers both as one download (one total, no restart from zero when the audio starts)
+
 ## 1.1.3 (2026-11-20)
 
 ### Network speed test
