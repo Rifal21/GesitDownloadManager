@@ -187,6 +187,8 @@ class MainWindow(QMainWindow):
                                        "Connect Chrome, Brave, Edge, Vivaldi and Firefox to Gesit")
         self.a_about = self._act("About Gesit", None, a.about_dialog)
         self.a_update = self._act("Check for updates...", None, lambda: a.check_updates(manual=True))
+        self.a_speed = self._act("Network speed test...", None, a.speedtest_dialog, None,
+                                 "Measure your internet download speed, upload speed and latency")
 
     def _build_menus(self) -> None:
         mb = self.menuBar()
@@ -197,6 +199,7 @@ class MainWindow(QMainWindow):
         m.addAction(self.a_options)
         m.addAction(self.a_sched)
         m.addAction(self.a_integration)
+        m.addAction(self.a_speed)
         m.addSeparator()
         m.addAction(self.a_quit)
         m = mb.addMenu("&File")

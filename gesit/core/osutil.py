@@ -20,13 +20,21 @@ def _app_dir() -> str | None:
     return None
 
 
+def user_tools_dir() -> str:
+    """Folder where the user can drop newer ffmpeg / yt-dlp builds; survives reinstalling Gesit."""
+    from . import paths
+
+    return os.path.join(paths.data_dir(), "tools")
+
+
 def tool_path(name: str) -> str | None:
-    """Find ffmpeg / yt-dlp: bundled copy first (installer ships them), then PATH."""
+    """Find ffmpeg / yt-dlp: bundled copy first (installer ships them), then the user tools folder, then PATH."""
     exe = name + (".exe" if WINDOWS else "")
     dirs = [os.environ.get("GESIT_TOOLS_DIR")]
     app = _app_dir()
     if app:
         dirs += [os.path.join(app, "tools"), app]
+    dirs.append(user_tools_dir())  # a copy the user keeps up to date (yt-dlp changes every few weeks)
     for d in dirs:
         if d and os.path.isfile(os.path.join(d, exe)):
             return os.path.join(d, exe)

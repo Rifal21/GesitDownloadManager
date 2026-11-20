@@ -7,6 +7,7 @@ jobs alike: ``run()``, ``stop()``, status/total/downloaded/speed/filename...
 from __future__ import annotations
 
 import asyncio
+import datetime
 import os
 import re
 import shutil
@@ -236,6 +237,21 @@ def _mp4_args(have_ffmpeg: bool) -> list[str]:
             "--remux-video", "mp4"]
 
 
+STALE_DAYS = 45
+
+
+def _version_age_days(version: str, today: datetime.date | None = None) -> int | None:
+    """yt-dlp versions are dates ('2026.07.04'); None when the text is not one."""
+    m = re.match(r"^(\d{4})\.(\d{2})\.(\d{2})", version.strip())
+    if not m:
+        return None
+    try:
+        released = datetime.date(int(m[1]), int(m[2]), int(m[3]))
+    except ValueError:
+        return None
+    return ((today or datetime.date.today()) - released).days
+
+
 def _is_youtube(url: str) -> bool:
     host = (urllib.parse.urlsplit(url).hostname or "").lower()
     return any(host == d or host.endswith("." + d) for d in ("youtube.com", "youtu.be", "youtube-nocookie.com"))
@@ -279,7 +295,11 @@ class YtdlpJob(_ProcessJob):
                 raise DownloadError("yt-dlp is not installed (Linux: your package manager; Windows: reinstall Gesit with the tools option)")
             os.makedirs(self.req.save_dir, exist_ok=True)
             cookie_file = _write_cookie_file(self.req.cookies, self.req.url)
-            final = await self._run_attempts(exe, cookie_file)
+            try:
+                final = await self._run_attempts(exe, cookie_file)
+            except DownloadError as e:
+                hint = await self._stale_hint(exe)
+                raise DownloadError(f"{e}. {hint}" if hint else str(e)) from e
             if final is None:  # stopped by the user
                 self.speed = 0.0
                 self._set(PAUSED)
@@ -306,6 +326,24 @@ class YtdlpJob(_ProcessJob):
                     os.remove(cookie_file)
                 except OSError:
                     pass
+
+    async def _stale_hint(self, exe: str) -> str:
+        """Old yt-dlp is the usual reason YouTube answers 403 / 'page needs to be reloaded': say so."""
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                exe, "--version", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+                **({"creationflags": osutil.NO_WINDOW} if osutil.WINDOWS else {}),
+            )
+            out, _ = await asyncio.wait_for(proc.communicate(), 10)
+        except (OSError, asyncio.TimeoutError):
+            return ""
+        version = out.decode("utf-8", "ignore").strip()
+        age = _version_age_days(version)
+        if age is None or age < STALE_DAYS:
+            return ""
+        how = ("run 'yt-dlp -U' in the tools folder next to gesit.exe" if osutil.WINDOWS else
+               f"pip install -U yt-dlp, your package manager, or put the latest yt-dlp in {osutil.user_tools_dir()}")
+        return f"Your yt-dlp ({version}) is {age} days old and sites keep changing, which is the usual cause. Update it: {how}"
 
     async def _run_attempts(self, exe: str, cookie_file: str | None) -> str | None:
         """Cookies are a help, not a requirement, so a failed login must not sink a public video.

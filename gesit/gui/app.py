@@ -26,6 +26,7 @@ from .dialogs import AboutDialog, AddURLDialog, CompleteDialog, FileInfoDialog, 
 from .main_window import MainWindow
 from .options import OptionsDialog, SchedulerDialog
 from .progress import ProgressDialog
+from .speedtest_dialog import SpeedTestDialog
 
 URL_RE = re.compile(r"https?://[^\s\"'<>]+", re.I)
 
@@ -93,7 +94,8 @@ class GesitApp:
         for text, fn in (
             ("Show Gesit", self.show_main), ("Add URL...", self.add_url_dialog), (None, None),
             ("Start Queue", self.manager.start_queue), ("Stop All", self.manager.stop_all), (None, None),
-            ("Options", self.options_dialog), (None, None), ("Exit", self.quit),
+            ("Options", self.options_dialog), ("Speed test", self.speedtest_dialog), (None, None),
+            ("Exit", self.quit),
         ):
             if text is None:
                 m.addSeparator()
@@ -262,6 +264,17 @@ class GesitApp:
     def _keep(self, dlg) -> None:
         self._dialogs.add(dlg)
         dlg.finished.connect(lambda _r, d=dlg: self._dialogs.discard(d))
+
+    def speedtest_dialog(self) -> None:
+        for d in self._dialogs:
+            if isinstance(d, SpeedTestDialog):
+                d.show()
+                d.raise_()
+                d.activateWindow()
+                return
+        dlg = SpeedTestDialog(self.cfg, self.window)
+        self._keep(dlg)
+        dlg.show()
 
     def about_dialog(self) -> None:
         AboutDialog(self.window).exec()
@@ -524,7 +537,38 @@ def enable_autostart() -> str:
     return osutil.enable_autostart()
 
 
-CLI_FLAGS = ("--version", "--install-host", "--uninstall-host", "--quit", "--enable-autostart", "--disable-autostart")
+CLI_FLAGS = ("--version", "--install-host", "--uninstall-host", "--quit", "--enable-autostart", "--disable-autostart",
+             "--speedtest")
+
+
+def cli_speedtest() -> int:
+    """`gesit --speedtest`: the same measurement as the window, printed in the terminal."""
+    from ..core import speedtest
+
+    cfg = Config.load()
+    state = {"phase": None}
+
+    def progress(phase: str, mbps: float | None, _frac: float) -> None:
+        if phase != state["phase"] and phase != "done":
+            state["phase"] = phase
+            print({"ping": "Measuring latency...", "download": "Measuring download...",
+                   "upload": "Measuring upload..."}[phase], flush=True)
+
+    print("Gesit speed test (uses your connection at full speed for about 15 seconds)")
+    test = speedtest.SpeedTest(proxy=cfg.proxy_url(), on_progress=progress)
+    try:
+        res = test.run()
+    except KeyboardInterrupt:
+        test.cancel()
+        print("Stopped.")
+        return 130
+    except speedtest.SpeedTestError as e:
+        print(f"Speed test failed: {e}")
+        return 1
+    print(f"Ping      {res.ping_ms:.0f} ms (jitter {res.jitter_ms:.1f} ms)")
+    print(f"Download  {speedtest.format_rate(res.download_bps)}")
+    print(f"Upload    {speedtest.format_rate(res.upload_bps)}" + (f"  [{res.note}]" if res.note else ""))
+    return 0
 
 
 def _attach_console() -> None:
@@ -555,6 +599,8 @@ def main(argv: list[str] | None = None) -> int:
     if "--version" in argv:
         print(f"Gesit {__version__}")
         return 0
+    if "--speedtest" in argv:
+        return cli_speedtest()
     if "--install-host" in argv or "--uninstall-host" in argv:
         from .. import hostinstall
 

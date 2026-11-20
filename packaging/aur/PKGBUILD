@@ -2,7 +2,7 @@
 # AUR recipe: builds from the release tarball published on GitHub (see packaging/release.sh).
 # Before submitting to the AUR: publish the GitHub release first, run `updpkgsums`, then `makepkg -si` to test.
 pkgname=gesit
-pkgver=1.1.2
+pkgver=1.1.3
 pkgrel=1
 pkgdesc='Fast multi-connection download manager with browser integration (Chrome, Brave, Edge, Firefox)'
 arch=('any')

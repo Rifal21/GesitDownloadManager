@@ -105,6 +105,7 @@ class Config:
     check_updates: bool = True
     last_update_check: float = 0.0
     update_notified: str = ""  # newest version the user was already told about
+    last_speedtest: dict = field(default_factory=dict)  # {"ts", "down", "up" (Mbit/s), "ping" (ms)}
     # --- scheduler
     sched_enabled: bool = False
     sched_start: str = "02:00"

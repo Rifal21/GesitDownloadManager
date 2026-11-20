@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.3 (2026-11-20)
+
+### Network speed test
+- **Tasks > Network speed test...** (also in the tray menu) measures latency and jitter, download speed (4 parallel connections) and upload speed, with live numbers, and remembers the last result
+- `gesit --speedtest` prints the same measurement in the terminal
+- It only runs when you press Start and uses Cloudflare's public test servers (speed.cloudflare.com) with throw-away random data; nothing else is sent. Results show Mbit/s as your provider quotes it and MB/s as the download list shows it
+
+### Video downloads
+- When a yt-dlp download fails and the yt-dlp in use is more than 45 days old, the error now says so and how to update it. An old yt-dlp is what makes YouTube answer `HTTP Error 403` for every format of some videos
+- Gesit also looks for ffmpeg and yt-dlp in its own tools folder (`~/.local/share/gesit/tools`, `%LOCALAPPDATA%\Gesit\tools` on Windows) before PATH, so a newer yt-dlp can be dropped there without touching other software; the folder survives reinstalling Gesit
+
 ## 1.1.2 (2026-11-20)
 
 ### Video downloads

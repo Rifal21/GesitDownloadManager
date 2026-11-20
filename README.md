@@ -13,6 +13,7 @@ catatan Windows di [docs/WINDOWS.md](docs/WINDOWS.md).
 - Dialog Download File Info, dialog progress dengan bar bersegmen dan tabel koneksi
 - Video: HLS/DASH lewat ffmpeg, YouTube dan situs lain lewat yt-dlp
 - Proxy HTTP/SOCKS5, login per situs, tray icon (atau berjalan tersembunyi di GNOME), notifikasi
+- Tes kecepatan internet (ping, download, upload) di **Tasks → Network speed test** atau `gesit --speedtest`
 
 ## Pasang di Windows
 
@@ -57,6 +58,16 @@ Gesit mengecek rilis terbaru di GitHub saat dijalankan dan paling sering sekali 
 diunduh atau dipasang otomatis. Cek manual: **Help → Check for updates...**. Matikan pengecekan otomatis di
 **Options → General**. Pengguna AUR dan .deb memperbarui lewat package manager.
 
+## Tes kecepatan
+
+**Tasks → Network speed test...** (juga ada di menu tray) mengukur ping dan jitter, kecepatan download (4 koneksi paralel),
+dan kecepatan upload, dengan angka langsung selama tes berjalan. Tes memakan sekitar 15 detik dan memakai koneksimu
+sepenuh kecepatan. Hasil ditampilkan dalam Mbit/s (seperti yang disebut penyedia internet) dan MB/s (seperti di daftar
+download). Dari terminal: `gesit --speedtest`.
+
+Tes hanya berjalan saat kamu menekan Start. Server yang dipakai adalah server uji publik Cloudflare
+(`speed.cloudflare.com`); yang dikirim dan diterima hanya data acak sekali pakai.
+
 ## Ekstensi browser
 
 Di dalam aplikasi: **Tasks → Set up browser integration** (muncul juga sebagai tawaran saat pertama dijalankan).
@@ -88,7 +99,7 @@ Popup ekstensi menampilkan keputusan terakhir ("sent to Gesit" / "left to the br
 | `<file>.part` + `<file>.gesit` | Data parsial dan status segmen selama download |
 
 CLI: `gesit [URL...]`, `gesit --background`, `gesit --quit`, `gesit --install-host [--autostart] [--extension-id ID]`,
-`gesit --uninstall-host`, `gesit --enable-autostart`, `gesit --disable-autostart`, `gesit --version`.
+`gesit --uninstall-host`, `gesit --enable-autostart`, `gesit --disable-autostart`, `gesit --speedtest`, `gesit --version`.
 
 ## Pengembangan
 

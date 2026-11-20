@@ -57,3 +57,7 @@ Separately from the extension, the Gesit desktop application asks `api.github.co
 project when it starts and then at most once a day. This is a plain read request: it carries the app name and version in the
 User-Agent header (and your IP address reaches GitHub like any web request), nothing else. Turn it off in
 Options > General ("Check for new Gesit versions"). Nothing is downloaded or installed by it.
+
+The application also has a **network speed test** (Tasks > Network speed test, or `gesit --speedtest`). It runs only when you
+start it, talks to `speed.cloudflare.com`, and downloads and uploads random throw-away data; Cloudflare sees your IP address
+like any web server would. The result stays on your computer (last result in the Gesit settings file).

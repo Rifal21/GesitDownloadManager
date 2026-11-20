@@ -176,6 +176,9 @@ def fake_ytdlp(tmp_path, monkeypatch):
     exe.write_text(f"""#!/usr/bin/env python3
 import os, sys
 args = sys.argv[1:]
+if args == ["--version"]:
+    print(os.environ.get("FAKE_VERSION", "2099.01.01"))
+    sys.exit(0)
 with_cookies = "--cookies" in args
 if with_cookies:
     jar = open(args[args.index("--cookies") + 1]).read()
@@ -278,3 +281,49 @@ def test_cookie_file_is_scoped_to_the_site_and_private(tmp_path):
         assert open(http_path).read().splitlines()[1].startswith(".download1.example.com\tTRUE\t/\tFALSE\t")
     finally:
         os.remove(http_path)
+
+
+def test_failure_with_an_old_ytdlp_says_to_update_it(fake_ytdlp, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_FAIL", "both")
+    monkeypatch.setenv("FAKE_VERSION", "2020.01.15")
+    job = _run_ytdlp(tmp_path, "https://www.youtube.com/watch?v=abc")
+    assert job.status == ERROR
+    assert "ERROR: Sign in to confirm" in job.error
+    assert "Your yt-dlp (2020.01.15) is" in job.error and "days old" in job.error and "Update it" in job.error
+
+
+def test_failure_with_a_fresh_ytdlp_gives_no_update_advice(fake_ytdlp, tmp_path, monkeypatch):
+    import datetime
+    monkeypatch.setenv("FAKE_FAIL", "both")
+    monkeypatch.setenv("FAKE_VERSION", (datetime.date.today() - datetime.timedelta(days=3)).strftime("%Y.%m.%d"))
+    job = _run_ytdlp(tmp_path, "https://vimeo.com/123")
+    assert job.status == ERROR and "Update it" not in job.error
+
+
+def test_success_never_mentions_updates(fake_ytdlp, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_VERSION", "2020.01.15")
+    job = _run_ytdlp(tmp_path, "https://vimeo.com/123")
+    assert job.status == COMPLETE and not job.error
+
+
+@pytest.mark.parametrize("text,days", [("2026.07.04", 139), ("2026.07.04.123456", 139), ("nightly", None), ("", None),
+                                       ("2026.13.40", None)])
+def test_version_age(text, days):
+    import datetime
+    from gesit.engine.media import _version_age_days
+    assert _version_age_days(text, today=datetime.date(2026, 11, 20)) == days
+
+
+def test_user_tools_folder_is_searched_before_path(tmp_path, monkeypatch):
+    from gesit.core import osutil
+
+    if sys.platform == "win32":
+        pytest.skip("POSIX executable names")
+    monkeypatch.delenv("GESIT_TOOLS_DIR", raising=False)
+    monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
+    tools = tmp_path / "data" / "gesit" / "tools"
+    tools.mkdir(parents=True)
+    (tools / "yt-dlp").write_text("#!/bin/sh\n")
+    monkeypatch.setenv("PATH", str(tmp_path / "nothing"))
+    assert osutil.tool_path("yt-dlp") == str(tools / "yt-dlp")
+    assert osutil.user_tools_dir() == str(tools)
