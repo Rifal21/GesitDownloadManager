@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.1 (2026-11-20)
+
+### Updates
+- Gesit now tells you when a newer release is published: a dialog (or a tray notification when the window is hidden) on start and then at most once a day, once per version
+- **Help > Check for updates...** checks on demand; **Options > General** has a switch to turn the automatic check off
+- The only thing contacted is the public GitHub "latest release" page for this project; only the app name and version go in the request. The release page opens in the browser, nothing is downloaded or installed by itself
+
+### Video downloads
+- yt-dlp videos (YouTube and others) are now saved as `.mp4` (H.264 + AAC) instead of `.webm`; whatever ffmpeg can merge or remux is put into an mp4 container
+- Fixed `HTTP Error 403` on YouTube: separate video and audio streams are requested first, the pre-merged low-resolution format (itag 18) that YouTube refuses is only a fallback
+- Fixed HLS downloads failing with "Invalid argument" when the stream's audio is MP3 or AC3 (a forced `aac_adtstoasc` filter was removed; the mp4 muxer adds it for AAC by itself)
+
 ## 1.1.0 (2026-11-17)
 
 Windows support.

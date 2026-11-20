@@ -186,6 +186,7 @@ class MainWindow(QMainWindow):
         self.a_integration = self._act("Set up browser integration...", None, a.setup_integration, None,
                                        "Connect Chrome, Brave, Edge, Vivaldi and Firefox to Gesit")
         self.a_about = self._act("About Gesit", None, a.about_dialog)
+        self.a_update = self._act("Check for updates...", None, lambda: a.check_updates(manual=True))
 
     def _build_menus(self) -> None:
         mb = self.menuBar()
@@ -222,6 +223,7 @@ class MainWindow(QMainWindow):
         self.a_tree.toggled.connect(lambda v: self.tree.setVisible(v))
         m.addAction(self.a_tree)
         m = mb.addMenu("&Help")
+        m.addAction(self.a_update)
         m.addAction(self.a_about)
 
     def _build_toolbar(self) -> None:

@@ -85,6 +85,7 @@ class OptionsDialog(QDialog):
             ("show_progress_dialog", "Show the progress dialog when a download starts"),
             ("show_complete_dialog", "Show the download complete dialog"),
             ("notify_on_complete", "Desktop notification when a download finishes"),
+            ("check_updates", "Check for new Gesit versions (asks github.com at most once a day)"),
         ):
             cb = QCheckBox(text)
             cb.setChecked(getattr(c, key))

@@ -101,6 +101,10 @@ class Config:
     notify_on_complete: bool = True
     show_progress_dialog: bool = True
     show_complete_dialog: bool = True
+    # --- updates
+    check_updates: bool = True
+    last_update_check: float = 0.0
+    update_notified: str = ""  # newest version the user was already told about
     # --- scheduler
     sched_enabled: bool = False
     sched_start: str = "02:00"

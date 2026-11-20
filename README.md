@@ -49,6 +49,14 @@ lalu Gesit menyalin pengaturan dan daftar download pada start pertama. Folder `~
 `~/.local/share/lidm` dibiarkan sebagai cadangan. Download yang belum selesai tetap bisa dilanjutkan.
 Ekstensi lama harus dihapus dan diganti ekstensi Gesit (ID-nya berbeda).
 
+## Pembaruan
+
+Gesit mengecek rilis terbaru di GitHub saat dijalankan dan paling sering sekali sehari. Kalau ada versi baru, muncul dialog
+(atau notifikasi tray bila jendela tersembunyi) dengan tombol ke halaman rilis. Hanya satu permintaan baca ke
+`api.github.com/repos/Rifal21/GesitDownloadManager/releases/latest`; tidak ada data pengguna yang dikirim, dan tidak ada yang
+diunduh atau dipasang otomatis. Cek manual: **Help → Check for updates...**. Matikan pengecekan otomatis di
+**Options → General**. Pengguna AUR dan .deb memperbarui lewat package manager.
+
 ## Ekstensi browser
 
 Di dalam aplikasi: **Tasks → Set up browser integration** (muncul juga sebagai tawaran saat pertama dijalankan).

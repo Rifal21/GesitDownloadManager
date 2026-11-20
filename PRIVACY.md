@@ -1,6 +1,6 @@
 # Privacy Policy: Gesit browser extension
 
-_Last updated: 16 November 2026_
+_Last updated: 20 November 2026_
 
 The **Gesit Integration** browser extension connects your browser to the **Gesit** download manager installed
 on your own computer. It has no server, no account, no analytics, and no advertising.
@@ -50,3 +50,10 @@ the file's own website directly to download the file, exactly as your browser wo
 ## Contact
 
 Questions or removal requests: open an issue at https://github.com/Rifal21/GesitDownloadManager/issues
+
+## The Gesit application (update check)
+
+Separately from the extension, the Gesit desktop application asks `api.github.com` for the newest published release of this
+project when it starts and then at most once a day. This is a plain read request: it carries the app name and version in the
+User-Agent header (and your IP address reaches GitHub like any web request), nothing else. Turn it off in
+Options > General ("Check for new Gesit versions"). Nothing is downloaded or installed by it.

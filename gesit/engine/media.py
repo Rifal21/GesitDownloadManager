@@ -143,9 +143,11 @@ class HLSJob(_ProcessJob):
             self.filename = os.path.basename(util.unique_path(os.path.join(out_dir, name)))
             part = os.path.join(out_dir, self.filename + ".part")
             hdrs = "".join(f"{k}: {v}\r\n" for k, v in build_headers(self.req).items() if k != "Accept-Encoding")
+            # no explicit "-bsf:a aac_adtstoasc": the mp4 muxer adds it for AAC by itself, and forcing it
+            # makes ffmpeg fail ("Invalid argument") on streams whose audio is MP3 or AC3
             self._proc = await self._spawn(
                 ffmpeg, "-y", "-hide_banner", "-loglevel", "error", "-nostats", "-progress", "pipe:1",
-                "-headers", hdrs, "-i", url, "-c", "copy", "-bsf:a", "aac_adtstoasc", "-f", "mp4", part,
+                "-headers", hdrs, "-i", url, "-c", "copy", "-f", "mp4", part,
             )
             self._set(DOWNLOADING)
             err_task = asyncio.create_task(self._proc.stderr.read())
@@ -216,6 +218,23 @@ class HLSJob(_ProcessJob):
 _TAG_NAME, _TAG_FILE, _TAG_PROGRESS = "GESITN ", "GESITF ", "GESITP "
 
 
+def _mp4_args(have_ffmpeg: bool) -> list[str]:
+    """Format selection so the result is an .mp4 whenever possible.
+
+    Without arguments yt-dlp picks VP9 + Opus on YouTube and writes .webm, and sorting by container
+    alone picks AV1 (mp4, but many players and devices cannot play it). So: H.264 first, then the best
+    resolution available in H.264 (1080p on YouTube), AAC audio, and ffmpeg merges or remuxes whatever
+    is left into an mp4 container. Sites without H.264 still give their best resolution, as mp4.
+    Without ffmpeg nothing can be merged, so ask for a single ready-made mp4 file instead.
+    """
+    if not have_ffmpeg:
+        return ["-f", "b[ext=mp4]/b"]
+    # "bv+ba/b": separate video + audio streams first. The pre-merged formats (YouTube itag 18) are
+    # low resolution and YouTube answers 403 for them without a PO token.
+    return ["-f", "bv+ba/b", "-S", "vcodec:h264,res,acodec:m4a", "--merge-output-format", "mp4",
+            "--remux-video", "mp4"]
+
+
 class YtdlpJob(_ProcessJob):
     async def run(self) -> None:
         self._stopping = False
@@ -235,6 +254,7 @@ class YtdlpJob(_ProcessJob):
                 "--print", f"after_move:{_TAG_FILE}%(filepath)s",
             ]
             ffmpeg = osutil.tool_path("ffmpeg")
+            argv += _mp4_args(bool(ffmpeg))
             if ffmpeg:  # yt-dlp needs ffmpeg to merge video and audio streams
                 argv += ["--ffmpeg-location", os.path.dirname(ffmpeg)]
             if self.req.proxy:

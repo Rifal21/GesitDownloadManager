@@ -8,13 +8,15 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+import time
 
-from PySide6.QtCore import QObject, Qt, QTimer, Signal
-from PySide6.QtGui import QAction, QGuiApplication
+from PySide6.QtCore import QObject, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QAction, QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 
 from .. import __version__
-from ..core import ipc, osutil, util
+from ..core import ipc, osutil, updates, util
 from ..core.config import CONFIG_PATH, DB_PATH, Config, migrate_legacy
 from ..core.db import Database
 from ..core.manager import Manager
@@ -36,6 +38,7 @@ class Bridge(QObject):
     capture_many = Signal(list, dict)
     show_window = Signal()
     quit_requested = Signal()
+    update_result = Signal(object, str, bool)  # Update | None, error text, user asked for it
 
 
 class GesitApp:
@@ -55,6 +58,9 @@ class GesitApp:
         self.bridge.capture_many.connect(self.on_capture_many)
         self.bridge.show_window.connect(self.show_main)
         self.bridge.quit_requested.connect(self.quit)
+        self.bridge.update_result.connect(self._on_update_result)
+        self._pending_update: updates.Update | None = None
+        self._checking_updates = False
         self.manager.add_listener(lambda k, it: self.bridge.event.emit(k, it))
         self.manager.start()
 
@@ -68,6 +74,10 @@ class GesitApp:
         if not (background or self.cfg.start_minimized):
             self.window.show()
             QTimer.singleShot(1200, self._offer_integration)
+        QTimer.singleShot(15000, self.check_updates_auto)
+        self._update_timer = QTimer(self.window)  # long-running background instances check again later
+        self._update_timer.timeout.connect(self.check_updates_auto)
+        self._update_timer.start(6 * 3600 * 1000)
         try:
             from ..hostinstall import refresh_appimage_host
 
@@ -92,6 +102,7 @@ class GesitApp:
                 a.triggered.connect(lambda _c=False, f=fn: f())
                 m.addAction(a)
         t.setContextMenu(m)
+        t.messageClicked.connect(lambda: self._pending_update and self.show_main())
         t.activated.connect(
             lambda reason: self.toggle_main() if reason == QSystemTrayIcon.ActivationReason.Trigger else None
         )
@@ -109,6 +120,84 @@ class GesitApp:
         self.window.setWindowState(self.window.windowState() & ~Qt.WindowState.WindowMinimized)
         self.window.raise_()
         self.window.activateWindow()
+        if self._pending_update:
+            QTimer.singleShot(400, self._offer_update)
+
+    # ------------------------------------------------------------------ updates
+    def check_updates_auto(self) -> None:
+        """Quiet check on start and every few hours; hits GitHub at most once a day."""
+        if self.quitting or not self.cfg.check_updates:
+            return
+        if time.time() - self.cfg.last_update_check < 22 * 3600:
+            return
+        self.check_updates(manual=False)
+
+    def check_updates(self, manual: bool = True) -> None:
+        if self._checking_updates:
+            return
+        self._checking_updates = True
+        proxy = self.cfg.proxy_url()
+
+        def work() -> None:
+            upd, err = None, ""
+            try:
+                upd = updates.check(__version__, proxy=proxy)
+            except updates.UpdateError as e:
+                err = str(e)
+            except Exception as e:  # noqa: BLE001 - never let the checker take the app down
+                err = f"{type(e).__name__}: {e}"
+            self.bridge.update_result.emit(upd, err, manual)
+
+        threading.Thread(target=work, name="gesit-update-check", daemon=True).start()
+
+    def _on_update_result(self, upd, err: str, manual: bool) -> None:
+        self._checking_updates = False
+        if self.quitting:
+            return
+        if not err:
+            self.cfg.last_update_check = time.time()
+            self.cfg.save()
+        if manual:
+            if err:
+                QMessageBox.warning(self.window, "Check for updates", err)
+            elif upd:
+                self._pending_update = upd
+                self._offer_update()
+            else:
+                QMessageBox.information(self.window, "Check for updates",
+                                        f"Gesit {__version__} is the latest version.")
+            return
+        if err or not upd or upd.version == self.cfg.update_notified:
+            return
+        self._pending_update = upd
+        if self.window.isVisible():
+            self._offer_update()
+        elif self.tray:
+            self.notify("Gesit update available", f"Gesit {upd.version} is out (you have {__version__}). Click to see it.")
+        # no tray and hidden window: the offer appears the next time the window is shown
+
+    def _offer_update(self) -> None:
+        upd, self._pending_update = self._pending_update, None
+        if not upd:
+            return
+        self.cfg.update_notified = upd.version
+        self.cfg.save()
+        box = QMessageBox(self.window)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("Update available")
+        box.setText(f"Gesit {upd.version} is available. You have {__version__}.")
+        info = ("If you installed Gesit from the AUR or a .deb, update it with your package manager.\n"
+                "On Windows and for the AppImage, download the new version from the release page.")
+        box.setInformativeText(info)
+        if upd.notes:
+            box.setDetailedText(upd.notes)
+        box.setTextFormat(Qt.TextFormat.PlainText)
+        open_btn = box.addButton("Open release page", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+        box.finished.connect(lambda _r, b=box, o=open_btn, u=upd:
+                             QDesktopServices.openUrl(QUrl(u.url)) if b.clickedButton() is o else None)
+        self._keep(box)
+        box.show()
 
     # --------------------------------------------------------- browser integration
     def _offer_integration(self) -> None:
