@@ -10,6 +10,7 @@ import asyncio
 import os
 import re
 import shutil
+import tempfile
 import time
 import urllib.parse
 from typing import Callable
@@ -235,61 +236,54 @@ def _mp4_args(have_ffmpeg: bool) -> list[str]:
             "--remux-video", "mp4"]
 
 
+def _is_youtube(url: str) -> bool:
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    return any(host == d or host.endswith("." + d) for d in ("youtube.com", "youtu.be", "youtube-nocookie.com"))
+
+
+def _write_cookie_file(cookies: str, url: str) -> str | None:
+    """Turn the browser's "a=1; b=2" Cookie header into a Netscape cookie file for yt-dlp.
+
+    yt-dlp wants real cookies in its jar: logged-in YouTube cookies passed as a plain header make it
+    fail with "The page needs to be reloaded", and newer versions flag the header as deprecated.
+    The cookies are scoped to the host they came from, never wider.
+    """
+    host = (urllib.parse.urlsplit(url).hostname or "").lower()
+    if not host or not cookies:
+        return None
+    domain = "." + (host[4:] if host.startswith("www.") else host)
+    secure = "TRUE" if url.lower().startswith("https:") else "FALSE"
+    expiry = int(time.time()) + 86400
+    lines = ["# Netscape HTTP Cookie File"]
+    for pair in cookies.split(";"):
+        name, sep, value = pair.strip().partition("=")
+        if not sep or not name or re.search(r"[\s\x00-\x1f]", name) or re.search(r"[\x00-\x1f]", value):
+            continue
+        lines.append(f"{domain}\tTRUE\t/\t{secure}\t{expiry}\t{name}\t{value}")
+    if len(lines) == 1:
+        return None
+    fd, path = tempfile.mkstemp(prefix="gesit-cookies-", suffix=".txt")
+    with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:  # mkstemp creates it 0600
+        f.write("\n".join(lines) + "\n")
+    return path
+
+
 class YtdlpJob(_ProcessJob):
     async def run(self) -> None:
         self._stopping = False
         self._set(CONNECTING)
         exe = osutil.tool_path("yt-dlp")
+        cookie_file = None
         try:
             if not exe:
                 raise DownloadError("yt-dlp is not installed (Linux: your package manager; Windows: reinstall Gesit with the tools option)")
             os.makedirs(self.req.save_dir, exist_ok=True)
-            argv = [
-                exe, "--no-playlist", "--newline", "--no-colors", "--no-simulate",
-                "-o", os.path.join(self.req.save_dir, "%(title).150B.%(ext)s"),
-                "--progress-template",
-                f"download:{_TAG_PROGRESS}%(progress.downloaded_bytes)s %(progress.total_bytes)s "
-                "%(progress.total_bytes_estimate)s %(progress.speed)s",
-                "--print", f"before_dl:{_TAG_NAME}%(title).150B.%(ext)s",
-                "--print", f"after_move:{_TAG_FILE}%(filepath)s",
-            ]
-            ffmpeg = osutil.tool_path("ffmpeg")
-            argv += _mp4_args(bool(ffmpeg))
-            if ffmpeg:  # yt-dlp needs ffmpeg to merge video and audio streams
-                argv += ["--ffmpeg-location", os.path.dirname(ffmpeg)]
-            if self.req.proxy:
-                argv += ["--proxy", self.req.proxy]
-            if self.req.referer:
-                argv += ["--referer", self.req.referer]
-            if self.req.user_agent:
-                argv += ["--user-agent", self.req.user_agent]
-            if self.req.cookies:
-                argv += ["--add-headers", f"Cookie:{self.req.cookies}"]
-            argv.append(self.req.url)
-            self._proc = await self._spawn(*argv)
-            err_task = asyncio.create_task(self._proc.stderr.read())
-            self._set(DOWNLOADING)
-            final = None
-            async for raw in self._proc.stdout:
-                line = raw.decode("utf-8", "ignore").rstrip()
-                if line.startswith(_TAG_NAME):
-                    self.filename = util.sanitize_filename(line[len(_TAG_NAME):])
-                elif line.startswith(_TAG_FILE):
-                    final = line[len(_TAG_FILE):]
-                elif line.startswith(_TAG_PROGRESS):
-                    parts = line.split()[1:]
-                    nums = [float(p) if re.fullmatch(r"[\d.]+", p) else None for p in parts] + [None] * 4
-                    done, tot, est, spd = nums[:4]
-                    self._update_progress(int(done or 0), int(tot or est or 0) or None, spd or 0.0)
-            rc = await self._proc.wait()
-            err = (await err_task).decode("utf-8", "ignore").strip()
-            if self._stopping:
+            cookie_file = _write_cookie_file(self.req.cookies, self.req.url)
+            final = await self._run_attempts(exe, cookie_file)
+            if final is None:  # stopped by the user
                 self.speed = 0.0
                 self._set(PAUSED)
                 return
-            if rc != 0 or not final:
-                last = [ln for ln in err.splitlines() if ln.strip()]
-                raise DownloadError(f"yt-dlp failed: {last[-1] if last else rc}")
             self.final_path = final
             self.filename = os.path.basename(final)
             self.req.save_dir = os.path.dirname(final)
@@ -306,3 +300,85 @@ class YtdlpJob(_ProcessJob):
         except Exception as e:  # noqa: BLE001
             self.error, self.speed = f"{type(e).__name__}: {e}", 0.0
             self._set(ERROR)
+        finally:
+            if cookie_file:
+                try:
+                    os.remove(cookie_file)
+                except OSError:
+                    pass
+
+    async def _run_attempts(self, exe: str, cookie_file: str | None) -> str | None:
+        """Cookies are a help, not a requirement, so a failed login must not sink a public video.
+
+        Most sites: with the browser's cookies first (many downloads need the login), then without.
+        YouTube: without first. Public videos work that way, whereas a logged-in session that YouTube
+        has rotated makes yt-dlp stop with "The page needs to be reloaded"; the cookies are only used
+        when the video turns out to need them (age limit, private, members).
+        """
+        order = [cookie_file, None] if cookie_file else [None]
+        if cookie_file and _is_youtube(self.req.url):
+            order.reverse()
+        failures: list[tuple[bool, DownloadError]] = []  # (used cookies, error)
+        for cf in order:
+            try:
+                return await self._attempt(exe, cf)
+            except DownloadError as e:
+                failures.append((cf is not None, e))
+                if self._stopping:
+                    raise
+                if len(failures) < len(order):
+                    self.downloaded, self.total, self.speed = 0, None, 0.0
+                    self._set(CONNECTING)
+        if len(failures) == 1:
+            raise failures[0][1]
+        # report the answer the site gave without our login: it says what is really wrong with the video
+        plain = next(e for used, e in failures if not used)
+        raise DownloadError(f"{plain} (also failed with your browser cookies)")
+
+    async def _attempt(self, exe: str, cookie_file: str | None) -> str | None:
+        """One yt-dlp run. Returns the final path, None when stopped, raises DownloadError on failure."""
+        argv = [
+            exe, "--no-playlist", "--newline", "--no-colors", "--no-simulate",
+            "-o", os.path.join(self.req.save_dir, "%(title).150B.%(ext)s"),
+            "--progress-template",
+            f"download:{_TAG_PROGRESS}%(progress.downloaded_bytes)s %(progress.total_bytes)s "
+            "%(progress.total_bytes_estimate)s %(progress.speed)s",
+            "--print", f"before_dl:{_TAG_NAME}%(title).150B.%(ext)s",
+            "--print", f"after_move:{_TAG_FILE}%(filepath)s",
+        ]
+        ffmpeg = osutil.tool_path("ffmpeg")
+        argv += _mp4_args(bool(ffmpeg))
+        if ffmpeg:  # yt-dlp needs ffmpeg to merge video and audio streams
+            argv += ["--ffmpeg-location", os.path.dirname(ffmpeg)]
+        if self.req.proxy:
+            argv += ["--proxy", self.req.proxy]
+        if self.req.referer:
+            argv += ["--referer", self.req.referer]
+        if self.req.user_agent:
+            argv += ["--user-agent", self.req.user_agent]
+        if cookie_file:
+            argv += ["--cookies", cookie_file]
+        argv.append(self.req.url)
+        self._proc = await self._spawn(*argv)
+        err_task = asyncio.create_task(self._proc.stderr.read())
+        self._set(DOWNLOADING)
+        final = None
+        async for raw in self._proc.stdout:
+            line = raw.decode("utf-8", "ignore").rstrip()
+            if line.startswith(_TAG_NAME):
+                self.filename = util.sanitize_filename(line[len(_TAG_NAME):])
+            elif line.startswith(_TAG_FILE):
+                final = line[len(_TAG_FILE):]
+            elif line.startswith(_TAG_PROGRESS):
+                parts = line.split()[1:]
+                nums = [float(p) if re.fullmatch(r"[\d.]+", p) else None for p in parts] + [None] * 4
+                done, tot, est, spd = nums[:4]
+                self._update_progress(int(done or 0), int(tot or est or 0) or None, spd or 0.0)
+        rc = await self._proc.wait()
+        err = (await err_task).decode("utf-8", "ignore").strip()
+        if self._stopping:
+            return None
+        if rc != 0 or not final:
+            last = [ln for ln in err.splitlines() if ln.strip() and not ln.startswith("WARNING")]
+            raise DownloadError(f"yt-dlp failed: {last[-1] if last else rc}")
+        return final

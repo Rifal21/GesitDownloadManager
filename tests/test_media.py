@@ -3,6 +3,7 @@ import http.server
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import time
 
@@ -160,3 +161,120 @@ def test_ytdlp_job_turns_webm_into_mp4(tmp_path):
     finally:
         m.shutdown()
         httpd.shutdown()
+
+
+# --------------------------------------------------------------- yt-dlp cookies and retries
+@pytest.fixture()
+def fake_ytdlp(tmp_path, monkeypatch):
+    """A stand-in yt-dlp that logs how it was called and fails on demand (FAKE_FAIL=cookies|plain|both)."""
+    if sys.platform == "win32":
+        pytest.skip("shebang script")
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    log = tmp_path / "calls.log"
+    exe = tools / "yt-dlp"
+    exe.write_text(f"""#!/usr/bin/env python3
+import os, sys
+args = sys.argv[1:]
+with_cookies = "--cookies" in args
+if with_cookies:
+    jar = open(args[args.index("--cookies") + 1]).read()
+    assert jar.startswith("# Netscape HTTP Cookie File"), jar
+open({str(log)!r}, "a").write("cookies" if with_cookies else "plain")
+open({str(log)!r}, "a").write("\\n")
+fail = os.environ.get("FAKE_FAIL", "")
+if fail == "both" or (fail == "cookies" and with_cookies) or (fail == "plain" and not with_cookies):
+    sys.stderr.write("WARNING: noise\\nERROR: " + ("session rotated" if with_cookies else "Sign in to confirm") + "\\n")
+    sys.exit(1)
+out = args[args.index("-o") + 1].replace("%(title).150B.%(ext)s", "video.mp4")
+open(out, "wb").write(b"x" * 2048)
+print("GESITN video.mp4")
+print("GESITF " + out)
+""")
+    exe.chmod(0o755)
+    monkeypatch.setenv("GESIT_TOOLS_DIR", str(tools))
+    monkeypatch.setenv("TMPDIR", str(tmp_path))  # cookie files must not be left behind here
+    monkeypatch.setattr("gesit.engine.media.tempfile.tempdir", str(tmp_path))
+    return log
+
+
+def _run_ytdlp(tmp_path, url, cookies="SID=abc; HSID=def"):
+    import asyncio
+    from gesit.engine.downloader import Request
+    from gesit.engine.media import YtdlpJob
+
+    job = YtdlpJob(Request(url=url, save_dir=str(tmp_path / "out"), cookies=cookies))
+    asyncio.run(job.run())
+    return job
+
+
+def _calls(log):
+    return log.read_text().split() if log.exists() else []
+
+
+def _no_cookie_files(tmp_path):
+    return [f for f in os.listdir(tmp_path) if f.startswith("gesit-cookies-")] == []
+
+
+def test_ytdlp_other_sites_use_cookies_first(fake_ytdlp, tmp_path):
+    job = _run_ytdlp(tmp_path, "https://vimeo.com/123")
+    assert job.status == COMPLETE and _calls(fake_ytdlp) == ["cookies"]
+    assert _no_cookie_files(tmp_path)
+
+
+def test_ytdlp_other_sites_retry_without_cookies(fake_ytdlp, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_FAIL", "cookies")
+    job = _run_ytdlp(tmp_path, "https://vimeo.com/123")
+    assert job.status == COMPLETE and _calls(fake_ytdlp) == ["cookies", "plain"]
+    assert _no_cookie_files(tmp_path)
+
+
+def test_ytdlp_youtube_tries_without_cookies_first(fake_ytdlp, tmp_path):
+    """A rotated YouTube login made yt-dlp stop with 'The page needs to be reloaded' on public videos."""
+    job = _run_ytdlp(tmp_path, "https://www.youtube.com/shorts/abc")
+    assert job.status == COMPLETE and _calls(fake_ytdlp) == ["plain"]
+
+
+def test_ytdlp_youtube_falls_back_to_cookies_for_restricted_videos(fake_ytdlp, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_FAIL", "plain")
+    job = _run_ytdlp(tmp_path, "https://youtu.be/abc")
+    assert job.status == COMPLETE and _calls(fake_ytdlp) == ["plain", "cookies"]
+    assert _no_cookie_files(tmp_path)
+
+
+def test_ytdlp_without_cookies_runs_once(fake_ytdlp, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_FAIL", "both")
+    job = _run_ytdlp(tmp_path, "https://vimeo.com/123", cookies="")
+    assert job.status == ERROR and _calls(fake_ytdlp) == ["plain"]
+    assert job.error == "yt-dlp failed: ERROR: Sign in to confirm"
+
+
+def test_ytdlp_both_attempts_failing_reports_the_sites_own_answer(fake_ytdlp, tmp_path, monkeypatch):
+    monkeypatch.setenv("FAKE_FAIL", "both")
+    for url in ("https://www.youtube.com/watch?v=abc", "https://vimeo.com/123"):
+        job = _run_ytdlp(tmp_path, url)
+        assert job.status == ERROR
+        assert job.error.startswith("yt-dlp failed: ERROR: Sign in to confirm"), job.error
+        assert "also failed with your browser cookies" in job.error
+        assert "session rotated" not in job.error  # warnings and the cookie run's error stay out
+    assert _no_cookie_files(tmp_path)
+
+
+def test_cookie_file_is_scoped_to_the_site_and_private(tmp_path):
+    from gesit.engine.media import _write_cookie_file
+
+    path = _write_cookie_file("SID=abc; bad name=1; =x; novalue; PREF=a=b", "https://www.youtube.com/watch?v=1")
+    try:
+        assert oct(os.stat(path).st_mode & 0o777) == oct(0o600) or sys.platform == "win32"
+        rows = [ln.split("\t") for ln in open(path).read().splitlines()[1:]]
+        assert [(r[0], r[3], r[5], r[6]) for r in rows] == [
+            (".youtube.com", "TRUE", "SID", "abc"), (".youtube.com", "TRUE", "PREF", "a=b")]
+    finally:
+        os.remove(path)
+    assert _write_cookie_file("", "https://example.com/") is None
+    assert _write_cookie_file("novalue", "https://example.com/") is None
+    http_path = _write_cookie_file("a=1", "http://download1.example.com/f")
+    try:
+        assert open(http_path).read().splitlines()[1].startswith(".download1.example.com\tTRUE\t/\tFALSE\t")
+    finally:
+        os.remove(http_path)

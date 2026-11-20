@@ -1,10 +1,10 @@
-; Inno Setup script for Gesit.  Build:  iscc /DAppVersion=1.1.1 packaging\windows\gesit.iss
+; Inno Setup script for Gesit.  Build:  iscc /DAppVersion=1.1.2 packaging\windows\gesit.iss
 ; Expects (created by build_windows.ps1):
 ;   build\windows\dist\Gesit\      PyInstaller output (gesit.exe, gesit-native-host.exe, _internal)
 ;   extension\dist\{chrome,firefox}  browser extensions
 ;   build\windows\tools\           ffmpeg.exe and yt-dlp.exe (optional)
 #ifndef AppVersion
-  #define AppVersion "1.1.1"
+  #define AppVersion "1.1.2"
 #endif
 #define AppName "Gesit"
 #define AppURL "https://github.com/Rifal21/GesitDownloadManager"

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.2 (2026-11-20)
+
+### Video downloads
+- Fixed `The page needs to be reloaded` on YouTube when the browser is logged in: public videos are now tried without the browser's cookies first, and the cookies are only used when the video needs them (age limit, private, members)
+- Other sites: cookies are tried first (many downloads need the login), then once more without them if that fails, so a stale login can no longer block a public video
+- Cookies reach yt-dlp through a temporary cookie file (deleted afterwards, owner-only) instead of a `Cookie:` header, which newer yt-dlp flags as deprecated
+- When both attempts fail, the message shown is the site's own answer ("Sign in to confirm...", "Private video") instead of an error from the stale login
+
 ## 1.1.1 (2026-11-20)
 
 ### Updates
